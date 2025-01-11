@@ -14,7 +14,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # EB uses port 8080
-EXPOSE 8080
+EXPOSE 9000
 
-# Get port from environment variable or default to 8080
-CMD uvicorn main:app --host 0.0.0.0 --port ${PORT:-8080}
+
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "9000"]
