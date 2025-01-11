@@ -5,6 +5,7 @@ from fastapi import FastAPI, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 import boto3
 import numpy as np
+from settings import Settings
 import tensorflow as tf
 from keras.applications.vgg16 import VGG16
 from keras.models import Model, load_model
@@ -14,6 +15,7 @@ import os
 
 app = FastAPI()
 
+settings = Settings()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -156,14 +158,14 @@ async def load_models():
 
     s3 = boto3.client(
         's3',
-        aws_access_key_id=os.environ['AWS_ACCESS_KEY_ID'],
-        aws_secret_access_key=os.environ['AWS_SECRET_ACCESS_KEY']
+        aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+        aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY
     )
 
     for model_name in ['a4c_model.keras', 'psax_model.keras']:
         s3.download_file(
             'fyp-models',
-            f'models/{model_name}',
+            f'{model_name}',
             f'/tmp/{model_name}'
         )
 
