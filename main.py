@@ -152,6 +152,9 @@ def process_demographic_data(demographic_data, volume_tracings, view):
         raise Exception(f"Error processing demographic data: {str(e)}")
 
 
+import os
+
+
 @app.on_event("startup")
 async def load_models():
     global feature_extractor, a4c_model, psax_model
@@ -162,12 +165,20 @@ async def load_models():
         aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY
     )
 
+    os.makedirs('/tmp', exist_ok=True)
+
     for model_name in ['a4c_model.keras', 'psax_model.keras']:
-        s3.download_file(
-            'fyp-models',
-            f'{model_name}',
-            f'/tmp/{model_name}'
-        )
+        model_path = f'/tmp/{model_name}'
+
+        if not os.path.exists(model_path) or os.path.getsize(model_path) == 0:
+            print(f"Downloading {model_name} from S3...")
+            s3.download_file(
+                'fyp-models',
+                f'{model_name}',
+                model_path
+            )
+        else:
+            print(f"Found existing {model_name}, skipping download")
 
     base_model = VGG16(weights='imagenet', include_top=False, input_shape=(224, 224, 3))
     feature_extractor = Model(inputs=base_model.input, outputs=base_model.output)
