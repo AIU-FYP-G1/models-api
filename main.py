@@ -177,8 +177,7 @@ def load_models_task():
         # Create tmp directory if it doesn't exist
         os.makedirs('/tmp', exist_ok=True)
 
-        # Check and download models if needed
-        for model_name in ['a4c_model.keras', 'psax_model.keras']:
+        for model_name in ['a4c_model.keras']:
             model_path = f'/tmp/{model_name}'
             if not os.path.exists(model_path) or os.path.getsize(model_path) == 0:
                 print(f"Downloading {model_name} from S3...")
