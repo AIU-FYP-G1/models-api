@@ -1,7 +1,7 @@
 import base64
 
 import pandas as pd
-from fastapi import FastAPI, UploadFile
+from fastapi import UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 import boto3
 import numpy as np
@@ -12,6 +12,9 @@ from keras.models import Model, load_model
 import cv2
 from typing import Dict
 import os
+
+from fastapi import FastAPI
+import threading
 
 app = FastAPI()
 
@@ -151,40 +154,71 @@ def process_demographic_data(demographic_data, volume_tracings, view):
     except Exception as e:
         raise Exception(f"Error processing demographic data: {str(e)}")
 
+app = FastAPI()
 
-import os
+is_loading = False
+loading_complete = False
+loading_error = None
+
+
+def load_models_task():
+    """Background task to load models"""
+    global feature_extractor, a4c_model, psax_model, is_loading, loading_complete, loading_error
+
+    try:
+        is_loading = True
+
+        s3 = boto3.client(
+            's3',
+            aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+            aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY
+        )
+
+        # Create tmp directory if it doesn't exist
+        os.makedirs('/tmp', exist_ok=True)
+
+        # Check and download models if needed
+        for model_name in ['a4c_model.keras', 'psax_model.keras']:
+            model_path = f'/tmp/{model_name}'
+            if not os.path.exists(model_path) or os.path.getsize(model_path) == 0:
+                print(f"Downloading {model_name} from S3...")
+                s3.download_file(
+                    'fyp-models',
+                    f'{model_name}',
+                    model_path
+                )
+            else:
+                print(f"Found existing {model_name}, skipping download")
+
+        # Load VGG16 and create feature extractor
+        base_model = VGG16(weights='imagenet', include_top=False, input_shape=(224, 224, 3))
+        feature_extractor = Model(inputs=base_model.input, outputs=base_model.output)
+
+        # Load models from local files
+        a4c_model = load_model('/tmp/a4c_model.keras')
+        psax_model = load_model('/tmp/psax_model.keras')
+
+        loading_complete = True
+
+    except Exception as e:
+        loading_error = str(e)
+    finally:
+        is_loading = False
 
 
 @app.on_event("startup")
-async def load_models():
-    global feature_extractor, a4c_model, psax_model
+async def startup_event():
+    thread = threading.Thread(target=load_models_task)
+    thread.start()
 
-    s3 = boto3.client(
-        's3',
-        aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
-        aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY
-    )
 
-    os.makedirs('/tmp', exist_ok=True)
-
-    for model_name in ['a4c_model.keras', 'psax_model.keras']:
-        model_path = f'/tmp/{model_name}'
-
-        if not os.path.exists(model_path) or os.path.getsize(model_path) == 0:
-            print(f"Downloading {model_name} from S3...")
-            s3.download_file(
-                'fyp-models',
-                f'{model_name}',
-                model_path
-            )
-        else:
-            print(f"Found existing {model_name}, skipping download")
-
-    base_model = VGG16(weights='imagenet', include_top=False, input_shape=(224, 224, 3))
-    feature_extractor = Model(inputs=base_model.input, outputs=base_model.output)
-
-    a4c_model = load_model('/tmp/a4c_model.keras')
-    psax_model = load_model('/tmp/psax_model.keras')
+@app.get("/status")
+async def get_status():
+    return {
+        "is_loading": is_loading,
+        "loading_complete": loading_complete,
+        "error": loading_error
+    }
 
 
 @app.get("/")
