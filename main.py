@@ -1,8 +1,9 @@
 import base64
+import json
 from contextlib import asynccontextmanager
 
 import pandas as pd
-from fastapi import UploadFile
+from fastapi import UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
 import boto3
 import numpy as np
@@ -37,18 +38,9 @@ a4c_model = None
 psax_model = None
 
 
-def extract_video_features(video_data, feature_extractor, sequence_length=30, interval=1):
+def extract_video_features(video_data, sequence_length=30, interval=1):
     try:
-        # Decode base64 video data
-        video_bytes = base64.b64decode(video_data)
-
-        # Save to temporary file
-        temp_path = '/tmp/temp_video.mp4'
-        with open(temp_path, 'wb') as f:
-            f.write(video_bytes)
-
-        # Process video
-        cap = cv2.VideoCapture(temp_path)
+        cap = cv2.VideoCapture(video_data)
         frame_features = []
         count = 0
 
@@ -69,11 +61,6 @@ def extract_video_features(video_data, feature_extractor, sequence_length=30, in
 
         cap.release()
 
-        # Clean up
-        if os.path.exists(temp_path):
-            os.remove(temp_path)
-
-        # Pad sequence if needed
         while len(frame_features) < sequence_length:
             frame_features.append(np.zeros_like(frame_features[0]))
 
@@ -176,7 +163,6 @@ loading_error = None
 
 
 def load_models_task():
-    """Background task to load models"""
     global feature_extractor, a4c_model, psax_model, is_loading, loading_complete, loading_error
 
     try:
@@ -188,7 +174,6 @@ def load_models_task():
             aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY
         )
 
-        # Create tmp directory if it doesn't exist
         os.makedirs('/tmp', exist_ok=True)
 
         for model_name in ['a4c_model.keras', 'psax_model.keras']:
@@ -228,6 +213,13 @@ async def get_status():
     }
 
 
+def get_mock_tracings():
+    return {
+        'X': np.random.normal(100, 10, 100).tolist(),
+        'Y': np.random.normal(100, 10, 100).tolist()
+    }
+
+
 @app.get("/")
 async def root():
     return {"message": "EF Prediction API"}
@@ -236,9 +228,8 @@ async def root():
 @app.post("/predict")
 async def predict(
         video: UploadFile,
-        view: str,
-        demographic_data: Dict,
-        volume_tracings: Dict
+        view: str = Form(...),
+        demographic_data: str = Form(...),
 ):
     try:
         video_bytes = await video.read()
@@ -247,8 +238,9 @@ async def predict(
             f.write(video_bytes)
 
         video_features = extract_video_features(temp_path)
-
-        demographic_features = process_demographic_data(demographic_data, volume_tracings, view)
+        demo_data = json.loads(demographic_data)
+        volume_tracings = get_mock_tracings()
+        demographic_features = process_demographic_data(demo_data, volume_tracings, view)
 
         combined_input = {
             'input_layer': np.expand_dims(video_features, axis=0),
