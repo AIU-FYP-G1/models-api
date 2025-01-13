@@ -1,14 +1,19 @@
 import base64
+from contextlib import asynccontextmanager
 
 import pandas as pd
 from fastapi import UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 import boto3
 import numpy as np
+from keras import Model
+from keras.src.applications.vgg16 import VGG16
+from keras.src.saving import load_model
+
 from settings import Settings
 import tensorflow as tf
-from keras.applications.vgg16 import VGG16
-from keras.models import Model, load_model
+# from keras.applications.vgg16 import VGG16
+# from keras.models import Model, load_model
 import cv2
 from typing import Dict
 import os
@@ -154,7 +159,16 @@ def process_demographic_data(demographic_data, volume_tracings, view):
     except Exception as e:
         raise Exception(f"Error processing demographic data: {str(e)}")
 
-app = FastAPI()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    thread = threading.Thread(target=load_models_task)
+    thread.start()
+
+    yield
+
+
+app = FastAPI(lifespan=lifespan)
 
 is_loading = False
 loading_complete = False
@@ -203,12 +217,6 @@ def load_models_task():
         loading_error = str(e)
     finally:
         is_loading = False
-
-
-@app.on_event("startup")
-async def startup_event():
-    thread = threading.Thread(target=load_models_task)
-    thread.start()
 
 
 @app.get("/status")
