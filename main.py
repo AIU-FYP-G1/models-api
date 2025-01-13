@@ -233,7 +233,7 @@ async def predict(
 ):
     try:
         video_bytes = await video.read()
-        temp_path = '/tmp/temp_video.mp4'
+        temp_path = '/tmp/temp_video.avi'
         with open(temp_path, 'wb') as f:
             f.write(video_bytes)
 
