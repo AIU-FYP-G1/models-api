@@ -242,10 +242,16 @@ async def predict(
         volume_tracings = get_mock_tracings()
         demographic_features = process_demographic_data(demo_data, volume_tracings, view)
 
-        combined_input = {
-            'input_layer': np.expand_dims(video_features, axis=0),
-            'input_layer_1': np.expand_dims(demographic_features, axis=0)
-        }
+        if view == 'a4c':
+            combined_input = {
+                'input_layer': np.expand_dims(video_features, axis=0),
+                'input_layer_1': np.expand_dims(demographic_features, axis=0)
+            }
+        else:
+            combined_input = {
+                'input_layer_2': np.expand_dims(video_features, axis=0),
+                'input_layer_3': np.expand_dims(demographic_features, axis=0)
+            }
 
         # Select model and predict
         model = a4c_model if view == 'a4c' else psax_model
